@@ -27,7 +27,11 @@
 | Backups validate/restore/traversal | `api/test_backups.py` |
 | Codebase context: exclusions, traversal, symlink escape, redaction, system dirs, read-only | `api/test_codebase.py`, `tests/e2e/codebase.spec.ts` |
 | Model fit heuristic | `web/tests/models.test.ts` |
-| Missing Ollama / malformed model output / cancel / concurrency | `api/test_ai.py` (mocked Ollama transport) |
+| Missing Ollama / malformed model output / cancel / concurrency / thinking flag | `api/test_ai.py` (mocked Ollama transport) |
+| OpenAI-compatible runtime | `unit/test_openai_compatible.py` (mocked server) |
+| Custom templates | `api/test_templates.py`, `tests/e2e/phase5.spec.ts` |
+| Agent handoff (no overwrite, symlink refusal, confirmation, quoting) | `api/test_handoff.py`, `tests/e2e/phase5.spec.ts` |
+| AI finding post-filter | `unit/test_recommendations.py` |
 | Database failure handling | `api/test_errors.py` |
 | Offline workflow, no external sockets | `api/test_offline.py` |
 | Safe Markdown | `web/tests/markdown.test.tsx` |
@@ -52,10 +56,13 @@
 |---|---|
 | `npm run lint:api` | ruff check + format check pass |
 | `npm run typecheck` | pass (strict) |
-| `npm run test:api` | 112 passed |
+| `npm run test:api` | 131 passed |
 | `npm run test:web` | 24 passed |
-| `npm run test:e2e` | 4 passed (Chromium, production build, fresh temp DB, Ollama on closed port, external requests blocked) |
+| `npm run test:e2e` | 6 passed, 1 skipped (Chromium, production build, fresh temp DB, Ollama on closed port, external requests blocked) |
+| `npm run test:e2e:real-model` | 1 passed — UI against real qwen3:8b: select, analyse, refine + diff, save, cancel |
+| `scripts/validate_model.py` | all 12 operations succeeded with qwen3:8b; see MODEL_VALIDATION.md |
 | Manual | `npm run dev` startup, proxy health, DNS-rebinding Host rejected (400), port-conflict message, Ctrl+C leaves no listeners |
 
-Not verified: physically disconnected machine; generation with a real local
-model (no model installed on the development machine); Linux/Windows.
+Not verified: physically disconnected machine; real LM Studio / llama.cpp
+servers (OpenAI-compatible runtime is mock-tested only); Windows. Linux is
+covered by CI (GitHub Actions, ubuntu-latest).

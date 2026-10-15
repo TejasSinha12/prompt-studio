@@ -20,6 +20,7 @@ import {
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
+import { runtimeLabel } from "@/lib/format";
 import { useLocalStorage, useResource } from "@/lib/hooks";
 import type { Page, ProjectSummary } from "@/lib/types";
 import { AppProvider, useApp } from "./AppContext";
@@ -148,8 +149,8 @@ function StatusBar() {
   if (backendOk === false) ai = <span className="text-danger">Backend unreachable</span>;
   else if (!models) ai = <span>Checking local AI…</span>;
   else if (aiReady) ai = <span>Local AI ready · {models.selected_model}</span>;
-  else if (models.available) ai = <span>Ollama connected · no model selected — rule-based mode</span>;
-  else ai = <span>Ollama unavailable — rule-based mode</span>;
+  else if (models.available) ai = <span>{runtimeLabel(models.provider)} connected · no model selected — rule-based mode</span>;
+  else ai = <span>{runtimeLabel(models.provider)} unavailable — rule-based mode</span>;
   return (
     <footer className="flex h-8 shrink-0 items-center justify-between gap-4 border-t border-border bg-panel px-3 text-[11px] text-muted">
       <Link href="/models" className="flex items-center gap-1.5 hover:text-text" aria-label="Local model status">

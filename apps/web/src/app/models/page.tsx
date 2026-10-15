@@ -6,7 +6,7 @@ import { useApp } from "@/components/AppContext";
 import { useToast } from "@/components/Toast";
 import { Badge, Button, Card, CardHeader, EmptyState, Notice, PageHeader, Select, Spinner } from "@/components/ui";
 import { api, errorMessage } from "@/lib/api";
-import { formatBytes, formatDate } from "@/lib/format";
+import { formatBytes, formatDate, runtimeLabel } from "@/lib/format";
 import { useResource } from "@/lib/hooks";
 import { fit, type Pref, recommend } from "@/lib/models";
 import type { AppSettings, ModelDetails, SystemInfo } from "@/lib/types";
@@ -44,16 +44,16 @@ export default function ModelsPage() {
   const rec = models ? recommend(models.models, mem, pref) : null;
   return (
     <div className="mx-auto max-w-5xl px-6 py-6">
-      <PageHeader title="Local Models" description="Ollama is optional. Without it, every rule-based feature keeps working."
+      <PageHeader title="Local Models" description="Local AI is optional. Without it, every rule-based feature keeps working."
         actions={<Button icon={<RefreshCw className="size-4" />} busy={busy} onClick={async () => { setBusy(true); await refresh(); setBusy(false); }}>Re-check</Button>} />
-      {!models ? <Spinner label="Checking Ollama" /> : (
+      {!models ? <Spinner label="Checking the local runtime" /> : (
         <div className="flex flex-col gap-4">
           <Card>
             <CardHeader title="Runtime status" />
             <div className="flex flex-col gap-2 px-4 py-3 text-[13px]">
               <p className="flex items-center gap-2">
                 {models.available ? <CheckCircle2 className="size-4 text-ok" aria-hidden /> : <XCircle className="size-4 text-danger" aria-hidden />}
-                {models.available ? `Ollama reachable at ${models.endpoint}${models.version ? ` (version ${models.version})` : ""}` : `Ollama not reachable at ${models.endpoint}`}
+                {models.available ? `${runtimeLabel(models.provider)} reachable at ${models.endpoint}${models.version ? ` (version ${models.version})` : ""}` : `${runtimeLabel(models.provider)} not reachable at ${models.endpoint}`}
               </p>
               {models.error && <p className="text-xs text-muted">{models.error}</p>}
               <p className="text-xs text-muted">Selected model: <strong className="text-text">{models.selected_model ?? "none"}</strong>
@@ -63,13 +63,25 @@ export default function ModelsPage() {
             </div>
           </Card>
 
-          {!models.available && (
+          {!models.available && models.provider === "openai_compatible" && (
+            <Card>
+              <CardHeader title="Set up an OpenAI-compatible local server (optional)" />
+              <div className="flex flex-col gap-2 px-4 py-3 text-[13px]">
+                <p><strong>LM Studio:</strong> download a model, open the Developer tab and start the local server (default <code>http://127.0.0.1:1234</code>).</p>
+                <p><strong>llama.cpp:</strong> <code className="rounded bg-panel-2 px-1">llama-server -m model.gguf --host 127.0.0.1 --port 8080</code></p>
+                <p>Then set the server URL in Settings and click “Re-check”. No API key is sent. This API exposes no model metadata, so size and memory-fit information are unavailable for this runtime.</p>
+                <Notice>Only <code>/v1/models</code> and <code>/v1/chat/completions</code> are used. Servers that reject JSON-schema output still work; responses are validated either way.</Notice>
+              </div>
+            </Card>
+          )}
+
+          {!models.available && models.provider !== "openai_compatible" && (
             <Card>
               <CardHeader title="Set up Ollama (optional)" />
               <div className="flex flex-col gap-2 px-4 py-3 text-[13px]">
                 <p>1. Install Ollama from <code>https://ollama.com/download</code> (macOS, Windows, Linux) or on macOS with Homebrew: <code className="rounded bg-panel-2 px-1">brew install ollama</code></p>
                 <p>2. Start it: open the Ollama app, or run <code className="rounded bg-panel-2 px-1">ollama serve</code></p>
-                <p>3. Download a model yourself, e.g. <code className="rounded bg-panel-2 px-1">ollama pull llama3.2:3b</code> (≈2 GB) or <code className="rounded bg-panel-2 px-1">ollama pull qwen2.5:7b</code> (≈4.7 GB).</p>
+                <p>3. Download a model yourself, e.g. <code className="rounded bg-panel-2 px-1">ollama pull qwen3:8b</code> (≈5.2 GB, validated with Prompt Studio — see docs/MODEL_VALIDATION.md) or the smaller <code className="rounded bg-panel-2 px-1">ollama pull qwen3:4b</code> (≈2.5 GB, not validated).</p>
                 <p>4. Click “Re-check”, then select the model below.</p>
                 <Notice>Prompt Studio never downloads models automatically. Sizes are approximate and change between releases; check <code>ollama show</code> after downloading.</Notice>
               </div>
@@ -78,7 +90,7 @@ export default function ModelsPage() {
 
           {models.available && (
             <Card>
-              <CardHeader title={`Installed models (${models.models.length})`}
+              <CardHeader title={`Available models (${models.models.length})`}
                 actions={models.models.length > 0 ? (
                   <label className="flex items-center gap-2 text-xs text-muted">Preference
                     <Select aria-label="Performance preference" value={pref} onChange={(e) => setPref(e.target.value as Pref)} className="h-7 w-32 text-xs">
@@ -88,7 +100,7 @@ export default function ModelsPage() {
                     </Select>
                   </label>) : undefined} />
               {models.models.length === 0 ? (
-                <EmptyState icon={<Cpu className="size-6" />} title="No models installed">Run <code>ollama pull llama3.2:3b</code> (or another model) in a terminal, then re-check.</EmptyState>
+                <EmptyState icon={<Cpu className="size-6" />} title="No models available">{models.provider === "ollama" ? <>Run <code>ollama pull qwen3:8b</code> (or another model) in a terminal, then re-check.</> : "Load a model in your local server, then re-check."}</EmptyState>
               ) : (
                 <>
                   {rec && <p className="px-4 pt-3 text-xs">Suggestion for “{pref}”: <strong>{rec.name}</strong> <span className="text-muted">— based only on download size vs. this machine’s memory ({formatBytes(mem)}). Not benchmarked.</span></p>}

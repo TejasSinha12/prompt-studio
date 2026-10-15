@@ -54,12 +54,26 @@ export default function SettingsPage() {
       <PageHeader title="Settings" description="Application settings are stored separately from project content and never included in exports." />
       <div className="flex flex-col gap-4">
         <Card>
-          <CardHeader title="Local AI (Ollama)" />
+          <CardHeader title="Local AI runtime" subtitle="Ollama, or any OpenAI-compatible server running locally (LM Studio, llama.cpp llama-server, vLLM)" />
           {!form ? <div className="p-4"><Spinner /></div> : (
             <div className="grid gap-3 px-4 py-3 md:grid-cols-2">
-              <Field label="Ollama endpoint" hint="Must be a loopback address unless remote is explicitly allowed" className="md:col-span-2">
-                {(id) => <Input id={id} value={form.ollama_url} onChange={(e) => setForm({ ...form, ollama_url: e.target.value })} />}
+              <Field label="Runtime" className="md:col-span-2">
+                {(id) => (
+                  <Select id={id} value={form.provider} onChange={(e) => setForm({ ...form, provider: e.target.value as AppSettings["provider"], model: null })}>
+                    <option value="ollama">Ollama</option>
+                    <option value="openai_compatible">OpenAI-compatible local server</option>
+                  </Select>
+                )}
               </Field>
+              {form.provider === "ollama" ? (
+                <Field label="Ollama endpoint" hint="Must be a loopback address unless remote is explicitly allowed" className="md:col-span-2">
+                  {(id) => <Input id={id} value={form.ollama_url} onChange={(e) => setForm({ ...form, ollama_url: e.target.value })} />}
+                </Field>
+              ) : (
+                <Field label="Server base URL" hint="e.g. LM Studio http://127.0.0.1:1234, llama-server http://127.0.0.1:8080. No API key is sent." className="md:col-span-2">
+                  {(id) => <Input id={id} value={form.openai_compatible_url} onChange={(e) => setForm({ ...form, openai_compatible_url: e.target.value })} />}
+                </Field>
+              )}
               <label className="flex items-start gap-2 text-xs md:col-span-2">
                 <input type="checkbox" checked={form.allow_remote_ollama} onChange={(e) => setForm({ ...form, allow_remote_ollama: e.target.checked })} className="mt-0.5" />
                 <span>Allow a non-loopback endpoint. <strong className="text-warn">Prompt content, requirements and project text you send to local-AI actions would then leave this machine.</strong> Off by default.</span>
@@ -76,6 +90,10 @@ export default function SettingsPage() {
                   </Select>
                 )}
               </Field>
+              <label className="flex items-start gap-2 text-xs md:col-span-2">
+                <input type="checkbox" checked={form.thinking} onChange={(e) => setForm({ ...form, thinking: e.target.checked })} className="mt-0.5" />
+                <span>Enable reasoning (“thinking”) for models that support it, such as qwen3. Often slower; may improve analysis quality. Only sent to models that report the capability.</span>
+              </label>
               {err && <p role="alert" className="text-xs text-danger md:col-span-2">{err}</p>}
               <div className="flex justify-end gap-2 md:col-span-2">
                 <Button disabled={!dirty} onClick={() => saved.data && setForm(saved.data)}>Reset</Button>

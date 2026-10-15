@@ -13,9 +13,10 @@
     "test:api": "cd apps/api && uv run pytest",
     "test:web": "cd apps/web && npm test",
     "test:e2e": "playwright test -c tests/e2e/playwright.config.ts",
-    "lint:api": "cd apps/api && uv run ruff check prompt_studio migrations tests && uv run ruff format --check prompt_studio tests",
+    "lint:api": "cd apps/api && uv run ruff check prompt_studio migrations tests scripts && uv run ruff format --check prompt_studio tests scripts",
     "typecheck": "cd apps/web && npx tsc --noEmit",
-    "check": "npm run lint:api && npm run typecheck && npm run test && npm run test:e2e"
+    "check": "npm run lint:api && npm run typecheck && npm run test && npm run test:e2e",
+    "test:e2e:real-model": "E2E_REAL_MODEL=${E2E_REAL_MODEL:-qwen3:8b} playwright test -c tests/e2e/playwright.config.ts real-model.spec.ts"
   },
   "engines": {
     "node": ">=20.9"

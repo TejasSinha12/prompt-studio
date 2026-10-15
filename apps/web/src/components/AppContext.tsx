@@ -2,6 +2,7 @@
 
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { runtimeLabel } from "@/lib/format";
 import type { AppSettings, ModelsStatus } from "@/lib/types";
 
 interface AppState {
@@ -55,11 +56,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const aiUnavailableReason = !models
     ? "Checking local model runtime…"
     : !models.available
-      ? "Ollama is not reachable. Rule-based features remain available."
+      ? `${runtimeLabel(models.provider)} is not reachable. Rule-based features remain available.`
       : !models.selected_model
         ? "No local model selected. Choose one on the Local Models page."
         : !models.selected_model_installed
-          ? `Selected model "${models.selected_model}" is not installed in Ollama.`
+          ? `Selected model "${models.selected_model}" is not available in ${runtimeLabel(models.provider)}.`
           : "";
 
   return (

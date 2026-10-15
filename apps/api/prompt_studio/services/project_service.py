@@ -10,7 +10,6 @@ from sqlalchemy.orm import Session
 
 from .. import schemas
 from ..engine.spec import ProjectSpec, PromptConfig, SpecRequirement
-from ..engine.templates.task_templates import TEMPLATES_BY_ID
 from ..errors import bad_request, conflict, not_found
 from ..models import (
     Finding,
@@ -141,9 +140,9 @@ class ProjectService:
         return p
 
     def create_from_template(self, data: schemas.ProjectFromTemplate) -> Project:
-        tpl = TEMPLATES_BY_ID.get(data.template_id)
-        if tpl is None:
-            raise not_found("Template")
+        from .template_service import TemplateService  # local import: template_service imports this module
+
+        tpl = TemplateService(self.db).resolve(data.template_id)
         cfg = PromptConfig(**tpl.config)
         p = Project(name=data.name, description=tpl.description, original_idea=tpl.idea, config=cfg.model_dump())
         self.db.add(p)

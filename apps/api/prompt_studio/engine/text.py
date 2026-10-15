@@ -21,8 +21,18 @@ def words(text: str) -> list[str]:
     return [w.lower().rstrip(".") for w in _WORD_RE.findall(text)]
 
 
+def stem(w: str) -> str:
+    """Very light suffix stripping so "comments"/"comment" and "notifications"/"notification" match."""
+    if len(w) > 5 and w.endswith("ies"):
+        return w[:-3] + "y"
+    for suffix in ("ing", "ed", "es", "s"):
+        if len(w) > len(suffix) + 3 and w.endswith(suffix) and not w.endswith("ss"):
+            return w[: -len(suffix)]
+    return w
+
+
 def content_tokens(text: str) -> set[str]:
-    return {w for w in words(text) if w not in _STOPWORDS and len(w) > 1}
+    return {stem(w) for w in words(text) if w not in _STOPWORDS and len(w) > 1}
 
 
 def jaccard(a: str, b: str) -> float:

@@ -43,6 +43,7 @@ class FakeOllama:
         ]
         self.chat_responses: list[Any] = []  # str content, or callable(request_json) -> str, or Exception
         self.chat_requests: list[dict] = []
+        self.capabilities = ["completion"]
 
     async def handler(self, request: httpx.Request) -> httpx.Response:
         if not self.available:
@@ -57,7 +58,7 @@ class FakeOllama:
                 200,
                 json={
                     "model_info": {"llama.context_length": 131072},
-                    "capabilities": ["completion"],
+                    "capabilities": self.capabilities,
                     "details": {"family": "llama"},
                 },
             )
@@ -93,7 +94,9 @@ def make_client(data_dir, fake_ollama) -> Callable[..., TestClient]:
         pf = None
         if use_fake:
             transport = httpx.MockTransport(fake_ollama.handler)
-            pf = lambda s: OllamaProvider(s.ollama_url, s.timeout_seconds, s.max_retries, transport=transport)  # noqa: E731
+            pf = lambda s: OllamaProvider(  # noqa: E731
+                s.ollama_url, s.timeout_seconds, s.max_retries, transport=transport, think=s.thinking
+            )
         c = TestClient(create_app(pf), base_url="http://127.0.0.1:8000", headers=HEADERS)
         c.__enter__()
         clients.append(c)

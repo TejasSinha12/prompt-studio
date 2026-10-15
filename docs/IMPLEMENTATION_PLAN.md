@@ -47,10 +47,10 @@ Additional local runtimes. **Status is tracked in the table below.**
 |---|---|---|
 | 0 | Done | Environment inspected; versions verified; all docs created |
 | 1 | Done | Shell, projects, SQLite + migrations, idea editor, templates, rule-based analysis, preview, copy/export, scripts, README |
-| 2 | Done (mock-verified) | Ollama provider, model list/details/selection, AI jobs (cancel, timeout, bounded retry, concurrency limit, dedupe), validated structured output with one repair, AI analysis/clarify/refine/feasibility. Tested against a mocked Ollama API; real Ollama 0.40.4 verified for status/listing only (no models installed) |
+| 2 | Done | Ollama provider, model list/details/selection, AI jobs (cancel, timeout, bounded retry, concurrency limit, dedupe), validated structured output with one repair, AI analysis/clarify/refine/feasibility. Automated tests use a mocked Ollama API; real-model behaviour measured with qwen3:8b (docs/MODEL_VALIDATION.md) |
 | 3 | Done | Requirements editor, approval workflow with alternatives + history, variants side by side, preservation report, diagnostics + compare, library, immutable versions, diff, restore, agent profiles + 10 export formats + ZIP |
 | 4 | Done | Backups (create/validate/restore/delete + CLI), delete-all, import validation, security tests, offline tests, E2E |
-| 5 | Partial | **Done:** local codebase context (read-only scan, exclusions, symlink/traversal protection, preview, redaction, summary). **Not done:** custom templates, additional local runtimes, coding-agent handoff |
+| 5 | Done | Local codebase context; custom templates (migration 0002); OpenAI-compatible local runtime (mock-verified only); controlled agent handoff (preview, explicit authorization, no silent overwrite, no execution); thinking-model support; real-model validation script + qwen3:8b results; GitHub Actions CI |
 
 ### Decisions made during implementation
 
@@ -59,3 +59,6 @@ Additional local runtimes. **Status is tracked in the table below.**
 * Timestamps are stored as naive UTC in SQLite and returned as timezone-aware UTC (`UTCDateTime` type) — found via manual testing (relative times were off by the local UTC offset).
 * `existing_codebase` accepts up to 100k characters (codebase summaries) and is treated as context, not requirements, by the analyzer.
 * Recommendations whose requirement text contains a `[bracketed placeholder]` cannot be approved until edited.
+* Real-model validation showed the first analysis prompt produced 15 near-duplicate "missing feature" findings (including a rejected item). The prompt now lists rejected items and rule-based findings, forbids feature suggestions, and output is post-filtered (duplicates, rejected matches, already-reported, per-category cap) with the drop counts reported in the job result.
+* Feasibility evaluation asks for concerns before the score (models generate fields in schema order) and gives explicit score bands.
+* Thinking (`think`) is only sent to models reporting the `thinking` capability; inline `<think>` blocks are always stripped.

@@ -22,7 +22,7 @@ export default defineConfig({
   testDir: ".",
   fullyParallel: false,
   workers: 1,
-  timeout: 60_000,
+  timeout: process.env.E2E_REAL_MODEL ? 600_000 : 60_000,
   expect: { timeout: 10_000 },
   reporter: [["list"]],
   outputDir: path.join(ROOT, "tests", "e2e", ".results"),
@@ -39,11 +39,12 @@ export default defineConfig({
       cwd: path.join(ROOT, "apps", "api"),
       url: `http://127.0.0.1:${API_PORT}/api/health`,
       reuseExistingServer: false,
-      timeout: 60_000,
+      timeout: process.env.E2E_REAL_MODEL ? 600_000 : 60_000,
       env: {
         ...cleanEnv,
         PROMPT_STUDIO_DATA_DIR: DATA_DIR,
-        PROMPT_STUDIO_OLLAMA_URL: "http://127.0.0.1:9",
+        // Ollama is unreachable unless the opt-in real-model test is requested (npm run test:e2e:real-model).
+        PROMPT_STUDIO_OLLAMA_URL: process.env.E2E_REAL_MODEL ? "http://127.0.0.1:11434" : "http://127.0.0.1:9",
         PROMPT_STUDIO_ALLOWED_ORIGINS: JSON.stringify([`http://127.0.0.1:${WEB_PORT}`]),
       },
     },

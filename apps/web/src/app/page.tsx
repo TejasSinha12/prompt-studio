@@ -8,7 +8,7 @@ import { useApp } from "@/components/AppContext";
 import { type NewProjectValues, ProjectForm } from "@/components/ProjectForm";
 import { Button, Card, CardHeader, Dialog, EmptyState, EngineBadge, ErrorBanner, PageHeader, SeverityBadge, Spinner } from "@/components/ui";
 import { api, errorMessage } from "@/lib/api";
-import { relativeTime } from "@/lib/format";
+import { relativeTime, runtimeLabel } from "@/lib/format";
 import { useResource } from "@/lib/hooks";
 import type { Dashboard, Project } from "@/lib/types";
 
@@ -84,8 +84,9 @@ export default function DashboardPage() {
           <Card>
             <CardHeader title="Local AI runtime" />
             <div className="flex flex-col gap-2 px-4 py-3 text-[13px]">
-              <Row label="Ollama">{models ? (models.available ? `Connected${models.version ? ` (v${models.version})` : ""}` : "Not reachable") : "Checking…"}</Row>
-              <Row label="Endpoint"><code className="text-xs">{settings?.ollama_url ?? "—"}</code></Row>
+              <Row label="Runtime">{models ? runtimeLabel(models.provider) : "—"}</Row>
+              <Row label="Status">{models ? (models.available ? `Connected${models.version ? ` (v${models.version})` : ""}` : "Not reachable") : "Checking…"}</Row>
+              <Row label="Endpoint"><code className="text-xs">{models?.endpoint ?? settings?.ollama_url ?? "—"}</code></Row>
               <Row label="Selected model">{models?.selected_model ?? "None"}</Row>
               <Row label="Operating mode">{aiReady ? "Local AI available on request" : "Rule-based (offline)"}</Row>
               {!aiReady && <p className="text-xs text-muted">{aiUnavailableReason}</p>}

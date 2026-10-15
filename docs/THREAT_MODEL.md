@@ -43,6 +43,8 @@ user's browser can attempt requests to localhost.
 | T14 | Unexpected outbound network from offline engine | I | Engine has no network code; test runs whole workflow with non-loopback sockets blocked | `test_offline.py` |
 | T15 | Arbitrary code / shell execution | E | No `subprocess`, `os.system`, `eval`, `exec` in app code | `test_security.py::test_no_shell_execution_in_source` |
 | T17 | Codebase scan reads secrets or escapes the chosen directory (symlinks, `..`) | I | Explicit absolute path; system dirs/home refused; no symlink following; secret/binary/size exclusions; per-file containment re-check; secret-line redaction; read-only | `test_codebase.py` |
+| T18 | Agent handoff overwrites user files or writes outside the chosen folder | T | Server-generated paths only; preview + explicit authorization (`confirm: WRITE`); existing files kept unless individually opted in, with backup; symlinked targets/parents refused; atomic writes; commands displayed, never executed | `test_handoff.py`, `tests/e2e/phase5.spec.ts` |
+| T19 | OpenAI-compatible endpoint used to exfiltrate data | I | Same loopback rule and opt-in as Ollama; no API key or Authorization header ever sent | `test_openai_compatible.py` |
 | T16 | Supply chain (malicious dependency) | E | Minimal deps; lockfiles committed (`uv.lock`, `package-lock.json`); no postinstall scripts of our own | Manual review; residual risk |
 
 ## Residual risks / limitations

@@ -18,7 +18,7 @@
   telemetry is disabled by the provided scripts (`NEXT_TELEMETRY_DISABLED=1`).
 * The rule-based engine performs no network I/O (verified by a test that
   blocks every non-loopback socket while running the full workflow).
-* Local AI requests go only to the configured Ollama endpoint, which must be a
+* Local AI requests go only to the configured local runtime endpoint (Ollama or an OpenAI-compatible local server), which must be a
   loopback address unless you explicitly enable a remote endpoint in Settings.
   If you do, the UI shows a warning that prompt content will be sent to that
   host.
@@ -41,6 +41,10 @@ is a separate program; consult its documentation for its own behaviour.
   individually, so you can recover.
 * To remove everything including backups, stop the app and delete the `data/`
   directory.
+
+## Agent handoff
+
+When you use “Hand off to agent”, Prompt Studio writes files into the folder you chose (after your authorization). It does not start the agent; what the agent does with the files is governed by that agent's own privacy terms.
 
 ## Exports
 

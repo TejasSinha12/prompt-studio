@@ -82,3 +82,12 @@ export function formatBytes(n: number | null | undefined): string {
 export function slugify(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "export";
 }
+
+export const RUNTIME_LABELS: Record<string, string> = {
+  ollama: "Ollama",
+  openai_compatible: "OpenAI-compatible local server",
+};
+
+export function runtimeLabel(provider: string | undefined): string {
+  return RUNTIME_LABELS[provider ?? "ollama"] ?? "Local runtime";
+}

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from typing import Any
 
 import httpx
@@ -17,6 +18,14 @@ from .base import ModelDetails, ModelInfo, ProviderError, ProviderStatus
 log = logging.getLogger(__name__)
 
 _RETRYABLE_STATUS = {502, 503, 504}
+_THINK_RE = re.compile(r"<think>.*?(</think>|$)", re.S)
+# (endpoint, model) -> capabilities reported by /api/show. Avoids a lookup per request.
+_CAPABILITIES: dict[tuple[str, str], list[str]] = {}
+
+
+def strip_thinking(text: str) -> str:
+    """Remove inline reasoning blocks some models emit even when thinking is disabled."""
+    return _THINK_RE.sub("", text).strip()
 
 
 class OllamaProvider:
@@ -28,7 +37,10 @@ class OllamaProvider:
         timeout_seconds: float = 120.0,
         max_retries: int = 2,
         transport: httpx.AsyncBaseTransport | None = None,
+        think: bool | None = None,
     ) -> None:
+        # None: never send the flag. True/False: sent only to models reporting the "thinking" capability.
+        self.think = think
         self.base_url = base_url.rstrip("/")
         self.timeout = httpx.Timeout(timeout_seconds, connect=3.0)
         self.max_retries = max(0, min(max_retries, 5))
@@ -155,6 +167,8 @@ class OllamaProvider:
         }
         if schema is not None:
             body["format"] = schema
+        if self.think is not None and "thinking" in await self._capabilities(model):
+            body["think"] = self.think
         resp = await self._request("POST", "/api/chat", json=body)
         try:
             content = resp.json()["message"]["content"]
@@ -162,7 +176,18 @@ class OllamaProvider:
             raise ProviderError("invalid_output", "Ollama response did not contain a message.") from e
         if not isinstance(content, str):
             raise ProviderError("invalid_output", "Ollama message content was not text.")
-        return content
+        return strip_thinking(content)
+
+    async def _capabilities(self, model: str) -> list[str]:
+        key = (self.base_url, model)
+        if key not in _CAPABILITIES:
+            try:
+                _CAPABILITIES[key] = (await self.show(model)).capabilities
+            except ProviderError as e:
+                if e.code == "model_missing":
+                    raise
+                return []  # unknown: do not send the flag, and retry the lookup next time
+        return _CAPABILITIES[key]
 
 
 def _error_text(resp: httpx.Response) -> str:

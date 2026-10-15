@@ -24,6 +24,7 @@ from ..config import get_settings
 from ..errors import AppError, bad_request, not_found
 from ..models import (
     AnalysisRun,
+    CustomTemplate,
     Evaluation,
     Finding,
     Project,
@@ -208,6 +209,7 @@ class PrivacyService:
             counts["prompts"] = self.db.execute(delete(Prompt)).rowcount
             counts["projects"] = self.db.execute(delete(Project)).rowcount
             counts["tags"] = self.db.execute(delete(Tag)).rowcount
+            counts["custom_templates"] = self.db.execute(delete(CustomTemplate)).rowcount
             self.db.commit()
         except Exception:
             self.db.rollback()

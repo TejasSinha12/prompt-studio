@@ -12,6 +12,7 @@ from ..db import get_session
 from ..engine.export.renderers import render, render_zip
 from ..engine.optimizer.builder import build_prompt, check_preservation
 from ..errors import AppError, bad_request
+from ..services import handoff_service
 from ..services.analysis_service import AnalysisService, RecommendationService, rec_out
 from ..services.project_service import ProjectService
 from ..services.prompt_service import PromptService
@@ -233,3 +234,35 @@ def export_zip(project_id: str, data: schemas.ExportZipRequest, db: Session = DB
         media_type="application/zip",
         headers={"content-disposition": 'attachment; filename="prompt-studio-export.zip"'},
     )
+
+
+# ----------------------------------------------------------------------------- agent handoff (explicit, no execution)
+
+
+def _handoff_inputs(db: Session, project_id: str, data: schemas.HandoffRequest):
+    svc = ProjectService(db)
+    project = svc.get(project_id)
+    spec = svc.to_spec(project)
+    prompt = _export_content(db, project_id, data.content, data.version_id) or build_prompt(spec, "balanced").content
+    return spec, prompt
+
+
+@router.post("/projects/{project_id}/handoff/preview")
+def handoff_preview(project_id: str, data: schemas.HandoffRequest, db: Session = DB):
+    """Show which files would be written. Writes nothing."""
+    spec, prompt = _handoff_inputs(db, project_id, data)
+    return handoff_service.plan(data.path, data.profile_id, spec, prompt).model_dump()
+
+
+@router.post("/projects/{project_id}/handoff/write")
+def handoff_write(project_id: str, data: schemas.HandoffWriteRequest, db: Session = DB):
+    """Write the previewed files after explicit confirmation. Never executes anything."""
+    spec, prompt = _handoff_inputs(db, project_id, data)
+    result = handoff_service.write(data.path, data.profile_id, spec, prompt, data.overwrite, data.confirm)
+    from ..services.project_service import add_event
+
+    add_event(
+        db, project_id, "handoff", f"Wrote {len(result['written'])} file(s) to {result['root']} for {data.profile_id}"
+    )
+    db.commit()
+    return result

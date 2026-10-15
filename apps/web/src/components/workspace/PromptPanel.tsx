@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, CheckCircle2, Copy, Download, FileArchive, Pencil, RefreshCw, Save, Sparkles } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Copy, Download, FileArchive, FolderOutput, Pencil, RefreshCw, Save, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, errorMessage } from "@/lib/api";
 import { copyText, downloadBlob, downloadText } from "@/lib/download";
@@ -14,6 +14,7 @@ import { Markdown } from "../Markdown";
 import { useToast } from "../Toast";
 import { Badge, Button, Card, EngineBadge, Input, Notice, Select, Spinner, Tabs, Textarea } from "../ui";
 import { AiJobStatus } from "./AiJobStatus";
+import { HandoffDialog } from "./HandoffDialog";
 
 interface EditorState {
   content: string;
@@ -209,7 +210,7 @@ export function PromptPanel({
         </Card>
       )}
 
-      <ExportBox projectId={projectId} projectName={projectName} versionId={projectPrompt?.current_version_id ?? null} fallback={current?.content ?? results?.[1]?.content ?? ""} />
+      <ExportBox projectId={projectId} projectName={projectName} profile={profile} versionId={projectPrompt?.current_version_id ?? null} fallback={current?.content ?? results?.[1]?.content ?? ""} />
     </div>
   );
 }
@@ -378,7 +379,8 @@ function PromptEditor({
   );
 }
 
-function ExportBox({ projectId, projectName, versionId, fallback }: { projectId: string; projectName: string; versionId: string | null; fallback: string }) {
+function ExportBox({ projectId, projectName, profile, versionId, fallback }: { projectId: string; projectName: string; profile: string; versionId: string | null; fallback: string }) {
+  const [handoff, setHandoff] = useState(false);
   const toast = useToast();
   const formats = useResource<ExportFormat[]>("/api/export-formats");
   const [fmt, setFmt] = useState("markdown");
@@ -411,7 +413,9 @@ function ExportBox({ projectId, projectName, versionId, fallback }: { projectId:
         <Button size="sm" icon={<FileArchive className="size-3" />} onClick={async () => {
           try { downloadBlob(`${slugify(projectName)}-agent-files.zip`, await api.blob(`/api/projects/${projectId}/export.zip`, { formats: ZIP_FORMATS, ...body })); } catch (e) { toast(errorMessage(e), "error"); }
         }}>All agent files (.zip)</Button>
+        <Button size="sm" icon={<FolderOutput className="size-3" />} onClick={() => setHandoff(true)}>Hand off to agent…</Button>
       </div>
+      {handoff && <HandoffDialog open onClose={() => setHandoff(false)} projectId={projectId} defaultProfile={profile} source={body} />}
       <p className="mt-1.5 text-xs text-muted">Exports are generated locally and never include settings or the Ollama endpoint. Instruction files (CLAUDE.md, AGENTS.md, .mdc) contain stable project conventions from confirmed requirements.</p>
     </Card>
   );

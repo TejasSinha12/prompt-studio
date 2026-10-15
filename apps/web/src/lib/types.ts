@@ -302,6 +302,8 @@ export interface ExportFormat {
 }
 
 export interface AppSettings {
+  provider: "ollama" | "openai_compatible";
+  openai_compatible_url: string;
   ollama_url: string;
   allow_remote_ollama: boolean;
   model: string | null;
@@ -311,6 +313,7 @@ export interface AppSettings {
   temperature: number;
   max_concurrent_jobs: number;
   default_target_agent: ProfileId;
+  thinking: boolean;
 }
 
 export interface ModelInfo {
@@ -332,6 +335,7 @@ export interface ModelDetails {
 }
 
 export interface ModelsStatus {
+  provider: "ollama" | "openai_compatible";
   available: boolean;
   endpoint: string;
   version: string | null;
@@ -390,6 +394,7 @@ export interface TaskTemplate {
   idea: string;
   config: Record<string, string>;
   requirements: { kind: ReqKind; text: string }[];
+  builtin: boolean;
 }
 
 export interface AgentProfile {

@@ -1,13 +1,13 @@
 "use client";
 
-import { Archive, ArchiveRestore, Copy, Download, PanelRightClose, PanelRightOpen, Save, Trash2 } from "lucide-react";
+import { Archive, ArchiveRestore, Copy, Download, FileStack, PanelRightClose, PanelRightOpen, Save, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { PromptVersions } from "@/components/PromptVersions";
 import { useToast } from "@/components/Toast";
-import { Badge, Button, EmptyState, ErrorBanner, Kbd, Spinner, Tabs } from "@/components/ui";
+import { Badge, Button, Dialog, EmptyState, ErrorBanner, Field, Input, Kbd, Spinner, Tabs } from "@/components/ui";
 import { ClarifyPanel } from "@/components/workspace/ClarifyPanel";
 import { FindingsPanel } from "@/components/workspace/FindingsPanel";
 import { HistoryPanel } from "@/components/workspace/HistoryPanel";
@@ -69,6 +69,9 @@ function Workspace() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [versionsKey, setVersionsKey] = useState(0);
   const [historyKey, setHistoryKey] = useState(0);
+  const [tplOpen, setTplOpen] = useState(false);
+  const [tplName, setTplName] = useState("");
+  const [tplIdea, setTplIdea] = useState(true);
 
   const p = project.data;
   useEffect(() => {
@@ -193,6 +196,8 @@ function Workspace() {
         <Button size="sm" icon={<Download className="size-3.5" />} onClick={async () => {
           try { downloadText(`${slugify(p.name)}.prompt-studio.json`, JSON.stringify(await api.get(`/api/projects/${p.id}/bundle`), null, 2), "application/json"); } catch (e) { toast(errorMessage(e), "error"); }
         }}>Export</Button>
+        <Button size="sm" icon={<FileStack className="size-3.5" />} disabled={dirty} title={dirty ? "Save first" : "Save the configuration and confirmed requirements as a reusable template"}
+          onClick={() => { setTplName(`${p.name} template`); setTplOpen(true); }}>Save as template</Button>
         {p.archived ? (
           <Button size="sm" icon={<ArchiveRestore className="size-3.5" />} onClick={() => simple(() => api.post(`/api/projects/${p.id}/restore`), "Restored")}>Restore</Button>
         ) : (
@@ -282,6 +287,20 @@ function Workspace() {
         )}
       </div>
 
+      <Dialog open={tplOpen} onClose={() => setTplOpen(false)} title="Save as template"
+        footer={<><Button onClick={() => setTplOpen(false)}>Cancel</Button><Button variant="primary" disabled={!tplName.trim()} onClick={async () => {
+          try {
+            await api.post(`/api/projects/${p.id}/save-as-template`, { name: tplName.trim(), include_idea: tplIdea });
+            toast("Template saved — find it under Templates");
+            setTplOpen(false);
+          } catch (e) { toast(errorMessage(e), "error"); }
+        }}>Save template</Button></>}>
+        <div className="flex flex-col gap-3 text-xs">
+          <Field label="Template name">{(fid) => <Input id={fid} value={tplName} maxLength={200} onChange={(e) => setTplName(e.target.value)} autoFocus />}</Field>
+          <label className="flex items-center gap-2"><input type="checkbox" checked={tplIdea} onChange={(e) => setTplIdea(e.target.checked)} /> Include the original idea text</label>
+          <p className="text-muted">Includes the prompt configuration and confirmed requirements (not assumptions, rejected items, or codebase context). New projects receive them as “proposed”.</p>
+        </div>
+      </Dialog>
       <ConfirmDialog
         open={confirmDelete}
         onClose={() => setConfirmDelete(false)}

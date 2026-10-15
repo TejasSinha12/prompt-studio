@@ -26,11 +26,12 @@ from ..db import session_scope
 from ..engine.optimizer.builder import build_prompt, check_preservation
 from ..engine.recommendations.generator import RecommendationDraft
 from ..engine.spec import Evidence, FindingDraft
-from ..engine.text import fingerprint, normalize
+from ..engine.text import fingerprint, jaccard, normalize, token_coverage
 from ..errors import AppError, conflict, not_found
 from ..models import AnalysisRun, Evaluation
 from ..providers.base import LocalModelProvider, ProviderError
 from ..providers.ollama import OllamaProvider
+from ..providers.openai_compatible import OpenAICompatibleProvider
 from .analysis_service import AnalysisService, RecommendationService
 from .project_service import ProjectService, add_event
 from .prompt_service import PromptService
@@ -40,7 +41,11 @@ ProviderFactory = Callable[[schemas.AppSettings], LocalModelProvider]
 
 
 def default_provider_factory(s: schemas.AppSettings) -> LocalModelProvider:
-    return OllamaProvider(s.ollama_url, timeout_seconds=s.timeout_seconds, max_retries=s.max_retries)
+    if s.provider == "openai_compatible":
+        return OpenAICompatibleProvider(
+            s.openai_compatible_url, timeout_seconds=s.timeout_seconds, max_retries=s.max_retries
+        )
+    return OllamaProvider(s.ollama_url, timeout_seconds=s.timeout_seconds, max_retries=s.max_retries, think=s.thinking)
 
 
 DATA_NOTICE = (
@@ -111,9 +116,10 @@ class AIConcern(BaseModel):
 
 
 class AIFeasibility(BaseModel):
-    score: int = Field(ge=0, le=100)
-    summary: str = Field(min_length=3, max_length=1000)
+    # Field order matters: models generate in schema order, so concerns come before the score.
     concerns: list[AIConcern] = Field(default_factory=list, max_length=10)
+    summary: str = Field(min_length=3, max_length=1000)
+    score: int = Field(ge=0, le=100)
 
 
 def _schema(model: type[BaseModel]) -> dict[str, Any]:
@@ -158,6 +164,47 @@ def _spec_block(svc: ProjectService, project_id: str) -> tuple[str, Any]:
     return block, spec
 
 
+def _context_block(db: Any, project_id: str, spec: Any) -> tuple[str, list[str], list[str]]:
+    """Rejected items and rule-based findings already reported, so the model does not repeat them."""
+    rejected = [r.text for r in spec.requirements if r.status == "rejected"]
+    known = [
+        f.title
+        for f in AnalysisService(db).list_findings(project_id)
+        if f.engine == "rule_based" and f.status != "resolved"
+    ]
+    block = (
+        "<rejected_by_user>\n" + ("\n".join(f"- {t}" for t in rejected) or "(none)") + "\n</rejected_by_user>\n"
+        "<already_reported>\n" + ("\n".join(f"- {t}" for t in known) or "(none)") + "\n</already_reported>"
+    )
+    return block, rejected, known
+
+
+AI_CATEGORY_CAP = 3
+
+
+def filter_ai_findings(
+    findings: list[AIFinding], rejected: list[str], known: list[str]
+) -> tuple[list[AIFinding], dict[str, int]]:
+    """Deterministic post-processing of model findings. Every drop is counted and reported."""
+    kept: list[AIFinding] = []
+    dropped = {"duplicate": 0, "matches_rejected": 0, "already_reported": 0, "category_cap": 0}
+    per_cat: dict[str, int] = {}
+    for f in findings:
+        text = f"{f.title} {f.solution}"
+        if any(jaccard(f.title, k.title) >= 0.5 for k in kept):
+            dropped["duplicate"] += 1
+        elif any(token_coverage(text, r) >= 0.6 or jaccard(f.title, r) >= 0.4 for r in rejected):
+            dropped["matches_rejected"] += 1
+        elif any(jaccard(f.title, k) >= 0.5 for k in known):
+            dropped["already_reported"] += 1
+        elif per_cat.get(f.category, 0) >= AI_CATEGORY_CAP:
+            dropped["category_cap"] += 1
+        else:
+            per_cat[f.category] = per_cat.get(f.category, 0) + 1
+            kept.append(f)
+    return kept, dropped
+
+
 def _strip_fences(text: str) -> str:
     t = text.strip()
     if t.startswith("```"):
@@ -182,20 +229,33 @@ class LocalModelService:
         provider, model, options = self._ctx(settings)
         with session_scope() as db:
             block, spec = _spec_block(ProjectService(db), project_id)
+            context, rejected, known = _context_block(db, project_id, spec)
         system = (
-            "You are a meticulous requirements analyst. Identify concrete problems in the task specification: "
-            "ambiguity, missing requirements, contradictions, unsupported assumptions, missing acceptance "
-            "criteria, error handling, security, performance, scalability, dependency and compatibility risks, "
-            "missing tests, excessive scope, unnecessary complexity, duplicates, unclear boundaries. "
-            "Quote evidence verbatim in evidence_quote. Do not invent facts about the project. Return at most "
-            "15 findings as JSON. " + DATA_NOTICE
+            "You are a meticulous requirements reviewer. An AI coding agent will implement this specification. "
+            "Report where it would have to GUESS or could go wrong:\n"
+            "- features the user mentioned whose behaviour, data, rules or edge cases are undefined "
+            "(e.g. 'users sign in' without saying how; 'assign to teammates' without defining teams);\n"
+            "- ambiguous or untestable wording, contradictions, unsupported assumptions;\n"
+            "- risky, unnecessarily complex or infeasible technical choices; security or data-handling risks "
+            "implied by the stated features; unclear scope boundaries.\n"
+            "Rules:\n"
+            "1. Only report gaps in what the user DID ask for. Never suggest features they did not mention.\n"
+            "2. Never suggest anything listed in <rejected_by_user>.\n"
+            "3. Skip issues already listed in <already_reported> (found by deterministic rules).\n"
+            "4. Each finding quotes a DIFFERENT specific phrase from the spec verbatim in evidence_quote.\n"
+            "5. Report between 3 and 10 findings, at most 3 per category, most important first. Only report "
+            "fewer than 3 if the specification is genuinely complete.\n"
+            "6. Use severity high/critical only when the evidence clearly justifies it. " + DATA_NOTICE
         )
         start = time.perf_counter()
-        result, repaired = await generate_validated(provider, model, system, block, AIAnalysis, options)
+        result, repaired = await generate_validated(
+            provider, model, system, block + "\n" + context, AIAnalysis, options
+        )
+        findings, dropped = filter_ai_findings(result.findings, rejected, known)
         haystack = normalize(spec.all_text() + "\n" + spec.name)
         drafts: list[FindingDraft] = []
         extra: list[RecommendationDraft] = []
-        for f in result.findings:
+        for f in findings:
             quote_ok = bool(f.evidence_quote) and normalize(f.evidence_quote) in haystack
             confidence = f.confidence if quote_ok else "low"
             explanation = f.explanation + (
@@ -265,6 +325,7 @@ class LocalModelService:
                 "new_findings": new,
                 "new_recommendations": new_recs,
                 "repaired": repaired,
+                "dropped": dropped,
                 "model": model,
                 "engine": "local_ai",
             }
@@ -348,9 +409,13 @@ class LocalModelService:
         with session_scope() as db:
             content = PromptService(db).get_version(version_id).content
         system = (
-            "You assess whether an AI coding agent could realistically implement the task in <prompt> as "
-            "written: is it feasible, appropriately scoped, and unambiguous enough? Score 0-100 (judgment, "
-            "not a probability). List concrete concerns with quoted evidence. Return JSON. " + DATA_NOTICE
+            "You assess whether an AI coding agent could implement the task in <prompt> correctly AS WRITTEN, "
+            "without guessing. First list concrete concerns, each with a verbatim quote as evidence and a fix. "
+            "Then summarise. Then score with this rubric: 90-100 = unambiguous, scoped, testable, nothing to "
+            "guess; 70-89 = minor gaps; 40-69 = several important decisions left to the agent (e.g. unclear "
+            "data model, auth, error handling, or vague quality targets); 0-39 = mostly undefined. Vague words "
+            "like 'fast' or 'scale well' without numbers are concerns. The score is a judgment, not a "
+            "probability. Return JSON. " + DATA_NOTICE
         )
         result, repaired = await generate_validated(
             provider, model, system, f"<prompt>\n{content}\n</prompt>", AIFeasibility, options
@@ -525,6 +590,7 @@ class JobManager:
 
 def model_list_payload(status: Any, models: list[Any], selected: str | None) -> dict[str, Any]:
     return {
+        "provider": status.provider,
         "available": status.available,
         "endpoint": status.endpoint,
         "version": status.version,

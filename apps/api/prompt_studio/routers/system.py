@@ -14,13 +14,13 @@ from ..config import get_settings
 from ..db import get_session
 from ..engine.export.renderers import FORMATS
 from ..engine.templates.profiles import PROFILES
-from ..engine.templates.task_templates import TEMPLATES
 from ..models import Finding, Project, Prompt, PromptVersion, Recommendation
 from ..providers.base import ProviderError
 from ..services.ai_service import JobManager, LocalModelService, model_list_payload
 from ..services.backup_service import BackupService, PrivacyService
 from ..services.codebase_service import ScanLimits, scan, summarize
 from ..services.settings_service import SettingsService
+from ..services.template_service import TemplateService
 
 router = APIRouter(prefix="/api", tags=["system"])
 DB = Depends(get_session)
@@ -249,8 +249,33 @@ def codebase_summary(data: schemas.CodebaseSummaryRequest):
 
 
 @router.get("/templates")
-def list_templates():
-    return [t.model_dump() for t in TEMPLATES]
+def list_templates(db: Session = DB):
+    return TemplateService(db).list()
+
+
+@router.post("/templates", status_code=201)
+def create_template(data: schemas.TemplateIn, db: Session = DB):
+    return {"id": TemplateService(db).create(data).id}
+
+
+@router.put("/templates/{template_id}")
+def update_template(template_id: str, data: schemas.TemplateIn, db: Session = DB):
+    return {"id": TemplateService(db).update(template_id, data).id}
+
+
+@router.delete("/templates/{template_id}", status_code=204)
+def delete_template(template_id: str, confirm: bool = False, db: Session = DB):
+    if not confirm:
+        from ..errors import bad_request
+
+        raise bad_request("Deleting a template requires confirm=true.", "confirmation_required")
+    TemplateService(db).delete(template_id)
+    return Response(status_code=204)
+
+
+@router.post("/projects/{project_id}/save-as-template", status_code=201)
+def save_as_template(project_id: str, data: schemas.TemplateFromProject, db: Session = DB):
+    return {"id": TemplateService(db).from_project(project_id, data).id}
 
 
 @router.get("/profiles")

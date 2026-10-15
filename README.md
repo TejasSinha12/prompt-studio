@@ -16,10 +16,12 @@ It runs entirely on your machine at `http://127.0.0.1:3000`. No cloud APIs, no A
 | **Recommendations** | Generated for significant findings, with problem, rationale, proposal, benefits, trade-offs, complexity, dependencies, disadvantages, and verification. You can approve (optionally editing the text or choosing an alternative), reject, defer, restore, and see the full history. Only approved items change the spec, and rejected ones are never re-proposed. |
 | **Clarification** | Focused questions derived from open findings (plus optional local-AI questions). Each answer becomes a confirmed requirement. |
 | **Prompt generation** | Concise / balanced / detailed variants side by side, built from a 24-section schema. Empty sections are omitted, your text is kept verbatim, template guidance is labelled, and unconfirmed assumptions are flagged. A preservation report checks that every confirmed requirement is present. |
-| **Local AI (optional)** | Ollama status, model list, details (context window, capabilities), selection, and a memory-fit heuristic. AI analysis, clarification, prompt refinement (shown as a diff, with preservation and rejected-item checks), and feasibility evaluation. Runs as cancellable background jobs with timeouts, bounded retries, schema validation, and one bounded repair attempt. |
+| **Local AI (optional)** | Ollama (primary) or any OpenAI-compatible local server (LM Studio, llama.cpp `llama-server`, vLLM). Status, model list, details (context window, capabilities), selection, a memory-fit heuristic, and optional reasoning (“thinking”) for models such as qwen3. AI analysis, clarification, prompt refinement (shown as a diff, with preservation and rejected-item checks), and feasibility evaluation. Runs as cancellable background jobs with timeouts, bounded retries, schema validation, and one bounded repair attempt. |
 | **Versions & library** | Immutable versions (enforced by a DB trigger). Restoring creates a new version. Line diff (unified or side-by-side), change summaries, favorites, tags, categories, duplication, content search, Markdown import. |
 | **Quality diagnostics** | 10 rule-based dimensions with evidence and suggested fixes, plus a documented heuristic aggregate. Feasibility is judged only by local AI. You can compare any two evaluations. |
 | **Exports** | Markdown, plain text, `CLAUDE.md`, `AGENTS.md`, Cursor `.mdc`, implementation plan, task breakdown, testing instructions, project spec, reusable template, or a ZIP of agent files. All work offline. |
+| **Templates** | 8 built-in task templates plus your own: create, edit, duplicate a built-in, or save a project as a template. Template requirements always arrive as “proposed”. |
+| **Agent handoff** | Writes the agent’s instruction file (`CLAUDE.md`, `AGENTS.md` or `.cursor/rules/*.mdc`) plus `.prompt-studio/PROMPT.md` and `TASKS.md` into a folder you choose. You see a preview first and must authorize it; existing files are kept unless you tick overwrite (backup first). It shows the command to start the agent for you to copy — it never runs anything. |
 | **Codebase context** | Read-only scan of a directory you choose. It excludes secrets, dependency/build dirs, binaries, large files, and `.gitignore` entries, never follows symlinks, shows a preview, redacts likely secrets, and inserts a summary into the project. |
 | **Data management** | Backups (SQLite online backup), validation (integrity, schema, foreign keys), and restore with a confirmation step and an automatic safety backup. Delete-all-data and a CLI. |
 
@@ -100,20 +102,31 @@ Configuration is read from environment variables or a `.env` file (copy [.env.ex
 1. Install Ollama from https://ollama.com/download, or run `brew install ollama`.
 2. Start it: open the Ollama app, or run `ollama serve`.
 3. Download a model yourself. Prompt Studio never downloads models. For example:
-   - `ollama pull llama3.2:3b` (about 2 GB)
-   - `ollama pull qwen2.5:7b` (about 4.7 GB)
+   - `ollama pull qwen3:8b` (about 5.2 GB, validated)
+   - `ollama pull qwen3:4b` (about 2.5 GB, smaller and faster, not validated)
 4. In Prompt Studio, open **Local Models**, click **Re-check**, then **Select** a model.
+
+**Validated model:** `qwen3:8b` (Ollama, Q4_K_M, ≈5.2 GB) was run through every local-AI feature on a 16 GB Apple Silicon Mac. See [docs/MODEL_VALIDATION.md](docs/MODEL_VALIDATION.md) for measured timings and observed quality. Other models have not been validated.
+
+**Other local runtimes:** in Settings → Local AI runtime, choose “OpenAI-compatible local server” and enter its URL (LM Studio default `http://127.0.0.1:1234`, llama.cpp `llama-server` default `http://127.0.0.1:8080`). No API key is ever sent. This runtime is tested against a mock server only.
 
 **Model selection:** the Local Models page suggests a model for a speed/balanced/quality preference. It compares download size + 20% against total memory. That is a rough heuristic, not a benchmark. Real memory use depends on quantization, context length (`num_ctx`, see Settings), and architecture. Not every model follows JSON schemas reliably; invalid output is detected, repaired once, and otherwise reported. Nothing invalid is stored.
 
 ## Running tests
 
 ```bash
-npm run test:api       # backend: pytest (112 tests)
-npm run test:web       # frontend: Vitest + Testing Library (24 tests)
+npm run test:api       # backend: pytest
+npm run test:web       # frontend: Vitest + Testing Library
 npx playwright install chromium   # once, for E2E
-npm run test:e2e       # Playwright E2E against real servers on ports 8100/3100 (4 tests)
+npm run test:e2e       # Playwright E2E against real servers on ports 8100/3100
 npm run check          # lint + typecheck + all of the above
+npm run test:e2e:real-model   # opt-in: drives the local-AI UI against a real Ollama model (default qwen3:8b)
+```
+
+Validate local-AI features against a real model (uses a throwaway database):
+
+```bash
+cd apps/api && uv run python scripts/validate_model.py --model qwen3:8b
 ```
 
 ## Data location, backup and restore
@@ -179,9 +192,10 @@ Last full run: 2026-10-15, macOS 26.6 arm64.
 |---|---|
 | `npm run lint:api` (ruff check + format) | pass |
 | `npm run typecheck` (tsc strict) | pass |
-| `npm run test:api` | **112 passed** |
+| `npm run test:api` | **131 passed** |
 | `npm run test:web` | **24 passed** |
-| `npm run test:e2e` | **4 passed** (Chromium, production build) |
+| `npm run test:e2e` | **6 passed**, 1 opt-in skipped (Chromium, production build) |
+| `npm run test:e2e:real-model` | **1 passed** against real `qwen3:8b` (opt-in; needs the model) |
 | `next build` | pass |
 
 **Offline evidence:**
@@ -190,7 +204,7 @@ Last full run: 2026-10-15, macOS 26.6 arm64.
 
 These checks prove the app makes no external connections in those workflows. **The app was not tested on a physically disconnected machine** (airplane mode).
 
-**Local AI evidence:** the Ollama integration is covered by tests against a programmable mock of the Ollama HTTP API (valid output, malformed output plus repair, double failure, transient 503 retry, connection loss, cancellation, duplicate-job prevention). The real Ollama 0.40.4 install on the development machine was verified for status and model listing (it had **no models**). **Generation against a real model has not been run** because no model was downloaded.
+**Local AI evidence:** automated tests run against a programmable mock of the Ollama API and of an OpenAI-compatible server (valid output, malformed output plus repair, double failure, transient 503 retry, connection loss, cancellation, duplicate-job prevention, thinking flag). Real-model behaviour was measured separately with `apps/api/scripts/validate_model.py` against `qwen3:8b` on Ollama 0.40.4; results are in [docs/MODEL_VALIDATION.md](docs/MODEL_VALIDATION.md). The OpenAI-compatible runtime has **not** been tested against a real LM Studio or llama.cpp server.
 
 ## Known limitations
 
@@ -200,12 +214,12 @@ These checks prove the app makes no external connections in those workflows. **T
 - Codebase scanning supports only the root `.gitignore`, and only plain glob patterns (no negation, no nested files).
 - Single user. No auth beyond the optional token. The database is not encrypted.
 - Agent instruction-file conventions were verified against official docs on 2026-10-15 and may change. Profiles are versioned in `engine/templates/profiles.py`.
-- Only macOS has been tested.
+- Local-AI analysis quality depends heavily on the model. With `qwen3:8b` it tends to report few findings and to over-rate severity (see docs/MODEL_VALIDATION.md); treat it as a second opinion next to the rule-based checks.
+- Only macOS has been tested locally; CI runs the test suites on Ubuntu.
 
 ## Roadmap
 
-- Validate prompts against real local models and record which ones handle structured output reliably.
-- User-defined templates and editable agent profiles.
-- Additional local runtimes (llama.cpp server, LM Studio) behind the existing provider interface.
+- Validate more local models (e.g. `qwen3:4b`, coder-tuned models) with `scripts/validate_model.py` and publish the results.
+- Editable agent export profiles.
 - Nested `.gitignore` and negation support for codebase scans.
-- Optional, explicitly consented coding-agent handoff (export plus copy-command only; no automatic execution).
+- Streaming progress for long local-AI jobs.

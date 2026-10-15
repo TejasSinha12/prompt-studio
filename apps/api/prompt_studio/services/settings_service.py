@@ -31,6 +31,7 @@ class SettingsService:
     def update(self, data: AppSettings) -> AppSettings:
         try:
             data.ollama_url = validate_endpoint(data.ollama_url, data.allow_remote_ollama)
+            data.openai_compatible_url = validate_endpoint(data.openai_compatible_url, data.allow_remote_ollama)
         except ProviderError as e:
             raise bad_request(e.message, "bad_endpoint") from None
         row = self.db.get(AppSetting, KEY)

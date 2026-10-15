@@ -176,3 +176,33 @@ def test_ai_evaluation_stored_separately(ai_client, fake_ollama):
     assert j["status"] == "succeeded"
     evs = ai_client.get(f"/api/prompt-versions/{vid}/evaluations").json()
     assert evs[0]["engine"] == "local_ai" and evs[0]["model"] == "llama3.2:3b"
+
+
+def test_think_flag_only_for_thinking_models(ai_client, fake_ollama):
+    from prompt_studio.providers import ollama
+
+    ollama._CAPABILITIES.clear()
+    p = create_project(ai_client)
+    ai_client.put(
+        "/api/settings", json={"model": "llama3.2:3b", "ollama_url": "http://127.0.0.1:11434", "thinking": True}
+    )
+    fake_ollama.chat_responses = [GOOD]
+    wait(ai_client, ai_client.post("/api/ai/jobs", json={"kind": "analysis", "project_id": p["id"]}).json()["id"])
+    assert "think" not in fake_ollama.chat_requests[-1]  # model does not report "thinking"
+
+    ollama._CAPABILITIES.clear()
+    fake_ollama.capabilities = ["completion", "thinking"]
+    ai_client.put(
+        "/api/settings", json={"model": "llama3.2:3b", "ollama_url": "http://127.0.0.1:11434", "thinking": False}
+    )
+    fake_ollama.chat_responses = [GOOD]
+    wait(ai_client, ai_client.post("/api/ai/jobs", json={"kind": "analysis", "project_id": p["id"]}).json()["id"])
+    assert fake_ollama.chat_requests[-1]["think"] is False
+
+
+def test_inline_think_blocks_stripped(ai_client, fake_ollama):
+    select_model(ai_client)
+    p = create_project(ai_client)
+    fake_ollama.chat_responses = ["<think>I should analyse carefully...</think>\n" + GOOD]
+    j = wait(ai_client, ai_client.post("/api/ai/jobs", json={"kind": "analysis", "project_id": p["id"]}).json()["id"])
+    assert j["status"] == "succeeded" and j["result"]["repaired"] is False

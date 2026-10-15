@@ -470,6 +470,9 @@ class ExportFileOut(BaseModel):
 
 
 class AppSettings(BaseModel):
+    # Local runtime: Ollama (default) or any OpenAI-compatible local server (LM Studio, llama.cpp, vLLM).
+    provider: Literal["ollama", "openai_compatible"] = "ollama"
+    openai_compatible_url: Annotated[str, StringConstraints(max_length=300)] = "http://127.0.0.1:1234"
     ollama_url: Annotated[str, StringConstraints(max_length=300)] = "http://127.0.0.1:11434"
     allow_remote_ollama: bool = False
     model: Annotated[str, StringConstraints(max_length=200)] | None = None
@@ -479,9 +482,12 @@ class AppSettings(BaseModel):
     temperature: float = Field(default=0.2, ge=0.0, le=2.0)
     max_concurrent_jobs: int = Field(default=1, ge=1, le=4)
     default_target_agent: ProfileId = "generic_coding"
+    # Reasoning ("thinking") for models that support it, e.g. qwen3. Slower; off by default.
+    thinking: bool = False
 
 
 class ModelsOut(BaseModel):
+    provider: str = "ollama"
     available: bool
     endpoint: str
     version: str | None = None
@@ -618,3 +624,41 @@ class CodebaseScanRequest(BaseModel):
 
 class CodebaseSummaryRequest(CodebaseScanRequest):
     files: list[Annotated[str, StringConstraints(min_length=1, max_length=1024)]] = Field(max_length=200)
+
+
+# ----------------------------------------------------------------------------- templates
+
+
+class TemplateRequirementIn(BaseModel):
+    kind: ReqKind
+    text: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=5_000)]
+
+
+class TemplateIn(BaseModel):
+    name: Name
+    description: ShortText = ""
+    category: Annotated[str, StringConstraints(max_length=40)] = "general"
+    idea: LongText = ""
+    config: dict[str, Annotated[str, StringConstraints(max_length=5_000)]] = Field(default_factory=dict, max_length=30)
+    requirements: list[TemplateRequirementIn] = Field(default_factory=list, max_length=100)
+
+
+class TemplateFromProject(BaseModel):
+    name: Name
+    description: ShortText = ""
+    include_idea: bool = True
+
+
+# ----------------------------------------------------------------------------- agent handoff
+
+
+class HandoffRequest(BaseModel):
+    path: Annotated[str, StringConstraints(min_length=1, max_length=4096)]
+    profile_id: ProfileId
+    version_id: str | None = None
+    content: LongText | None = None
+
+
+class HandoffWriteRequest(HandoffRequest):
+    overwrite: list[Annotated[str, StringConstraints(max_length=300)]] = Field(default_factory=list, max_length=10)
+    confirm: Annotated[str, StringConstraints(max_length=20)]
