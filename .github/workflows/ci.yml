@@ -19,7 +19,7 @@ jobs:
         working-directory: apps/api
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.3.0
       - run: uv python install 3.13
       - run: uv sync --locked
       - run: uv run ruff check prompt_studio migrations tests scripts
@@ -48,7 +48,7 @@ jobs:
     needs: [backend, frontend]
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.3.0
       - run: uv python install 3.13
       - uses: actions/setup-node@v7
         with:
