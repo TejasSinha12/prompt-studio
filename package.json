@@ -1,0 +1,26 @@
+{
+  "name": "prompt-studio",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local-first AI prompt optimization workbench",
+  "scripts": {
+    "setup": "node scripts/setup.mjs",
+    "dev": "node scripts/dev.mjs",
+    "start": "node scripts/dev.mjs --prod",
+    "db:init": "cd apps/api && uv run python -m prompt_studio.cli init-db",
+    "db:backup": "cd apps/api && uv run python -m prompt_studio.cli backup",
+    "test": "npm run test:api && npm run test:web",
+    "test:api": "cd apps/api && uv run pytest",
+    "test:web": "cd apps/web && npm test",
+    "test:e2e": "playwright test -c tests/e2e/playwright.config.ts",
+    "lint:api": "cd apps/api && uv run ruff check prompt_studio migrations tests && uv run ruff format --check prompt_studio tests",
+    "typecheck": "cd apps/web && npx tsc --noEmit",
+    "check": "npm run lint:api && npm run typecheck && npm run test && npm run test:e2e"
+  },
+  "engines": {
+    "node": ">=20.9"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1"
+  }
+}

@@ -1,0 +1,34 @@
+# Runtime data (database, backups) — never commit user content
+data/
+*.db
+*.sqlite3
+*.db-wal
+*.db-shm
+
+# Secrets / local config
+.env
+.env.*
+!.env.example
+CLAUDE.local.md
+
+# Dependencies & builds
+node_modules/
+.venv/
+__pycache__/
+*.pyc
+.next/
+next-env.d.ts
+*.tsbuildinfo
+.ruff_cache/
+.pytest_cache/
+
+# Test output
+tests/e2e/.results/
+playwright-report/
+test-results/
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+.claude/
